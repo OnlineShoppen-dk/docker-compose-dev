@@ -1,0 +1,6 @@
+[submodule "main-service"]
+	path = main-service
+	url = https://github.com/OnlineShoppen-dk/main-service
+[submodule "catalog-service"]
+	path = catalog-service
+	url = https://github.com/OnlineShoppen-dk/catalog-service

@@ -1,0 +1,220 @@
+version: "3"
+
+services:
+    setup:
+        profiles:
+            - setup
+        build:
+            context: setup/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        init: true
+        volumes:
+            - ./catalog-service/setup/entrypoint.sh:/entrypoint.sh:ro,Z
+            - ./catalog-service/setup/lib.sh:/lib.sh:ro,Z
+            - ./catalog-service/setup/roles:/roles:ro,Z
+        environment:
+            ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+            LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+            KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+            METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+            FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+            HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+            MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+            BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+        networks:
+            - elastic
+        depends_on:
+            - elasticsearch1
+
+    # main-service repository
+    rabbitqueue:
+        image: rabbitmq:3.13-management
+        container_name: rabbitqueue
+        command: rabbitmq-server
+        ports:
+            - "5672:5672"
+            - "15672:15672"
+        environment:
+            RABBITMQ_DEFAULT_USER: user
+            RABBITMQ_DEFAULT_PASS: userpass
+        healthcheck:
+            test: rabbitmq-diagnostics check_port_connectivity
+            interval: 20s
+            timeout: 10s
+            retries: 5
+        networks:
+            - queue-network
+
+    main-service-db:
+        image: mysql:8.0.29
+        container_name: main-service-db
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: mainpass
+            MYSQL_DATABASE: mainservicedb
+            MYSQL_USER: user
+            MYSQL_PASSWORD: userpass
+        ports:
+            - "3306:3306"
+        volumes:
+            - ./mysql:/var/lib/mysql
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+            interval: 20s
+            timeout: 10s
+            retries: 5
+
+    main-service:
+        build:
+            context: ./main-service/main-service/
+            dockerfile: Dockerfile
+        image: main-service
+        container_name: main-service-container
+        environment:
+            ISSUER: "OnlineShoppen.dk"
+            AUDIENCE: "OnlineShoppen.dk"
+            KEY: "SZBNheG6DYChL2oyIo6Q3dAiK4sREZGPX6orWfH2Mk="
+            CONNECTION_STRING: "server=192.168.65.254;user=user;password=userpass;database=mainservicedb"
+            RABBITMQ_HOST: "rabbitqueue"
+            RABBITMQ_PRODUCT_QUEUE: "productQueue"
+            RABBITMQ_USER: "user"
+            RABBITMQ_PASS: "userpass"
+        ports:
+            - "8081:8080"
+        networks:
+            - queue-network
+        depends_on:
+            main-service-db:
+                condition: service_healthy
+
+    catalogservice:
+        build:
+            context: ./catalog-service/catalog-service/
+            dockerfile: Dockerfile
+        ports:
+            - "8080:80" # Maps port 80 in the container to port 8080 on the host
+        networks:
+            - elastic
+            - queue-network # Ensures it is on the same network as your Elasticsearch services
+        depends_on:
+            - elasticsearch1 # Ensures it starts after Elasticsearch is available
+        restart: unless-stopped
+        environment:
+            - ELASTICSEARCH_URL=http://elasticsearch1:9200 # Example environment variable
+
+    elasticsearch1:
+        build:
+            context: ./catalog-service/elasticsearch/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        volumes:
+            - ./catalog-service/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+            - elasticsearch1:/usr/share/elasticsearch/data:Z
+        ports:
+            - "9200:9200"
+            - "9300:9300"
+        environment:
+            - node.name=elasticsearch1
+            - cluster.initial_master_nodes=elasticsearch1,elasticsearch2,elasticsearch3
+            - discovery.seed_hosts=elasticsearch2,elasticsearch3
+            - cluster.name=docker-cluster
+            - ES_JAVA_OPTS=-Xms512m -Xmx512m
+            - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
+        networks:
+            - elastic
+        restart: unless-stopped
+
+    elasticsearch2:
+        build:
+            context: ./catalog-service/elasticsearch/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        volumes:
+            - ./catalog-service/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+            - elasticsearch2:/usr/share/elasticsearch/data:Z
+        ports:
+            - "9201:9200"
+            - "9301:9300"
+        environment:
+            - node.name=elasticsearch2
+            - cluster.initial_master_nodes=elasticsearch1,elasticsearch2,elasticsearch3
+            - discovery.seed_hosts=elasticsearch1,elasticsearch3
+            - cluster.name=docker-cluster
+            - ES_JAVA_OPTS=-Xms512m -Xmx512m
+            - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
+        networks:
+            - elastic
+        restart: unless-stopped
+
+    elasticsearch3:
+        build:
+            context: ./catalog-service/elasticsearch/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        volumes:
+            - ./catalog-service/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+            - elasticsearch3:/usr/share/elasticsearch/data:Z
+        ports:
+            - "9202:9200"
+            - "9302:9300"
+        environment:
+            - node.name=elasticsearch3
+            - cluster.initial_master_nodes=elasticsearch1,elasticsearch2,elasticsearch3
+            - discovery.seed_hosts=elasticsearch1,elasticsearch2
+            - cluster.name=docker-cluster
+            - ES_JAVA_OPTS=-Xms512m -Xmx512m
+            - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
+        networks:
+            - elastic
+        restart: unless-stopped
+
+    logstash:
+        build:
+            context: ./catalog-service/logstash/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        volumes:
+            - ./catalog-service/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+            - ./catalog-service/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+        ports:
+            - 5044:5044
+            - 50000:50000/tcp
+            - 50000:50000/udp
+            - 9600:9600
+        environment:
+            LS_JAVA_OPTS: -Xms256m -Xmx256m
+            LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+        networks:
+            - elastic
+            - queue-network
+        depends_on:
+            - elasticsearch1
+        restart: unless-stopped
+
+    kibana:
+        build:
+            context: ./catalog-service/kibana/
+            args:
+                ELASTIC_VERSION: ${ELASTIC_VERSION}
+        volumes:
+            - ./catalog-service/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+        ports:
+            - 5601:5601
+        environment:
+            KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+        networks:
+            - elastic
+        depends_on:
+            - elasticsearch1
+        restart: unless-stopped
+
+networks:
+    queue-network:
+    elastic:
+        driver: bridge
+
+volumes:
+    elasticsearch1:
+    elasticsearch2:
+    elasticsearch3:
