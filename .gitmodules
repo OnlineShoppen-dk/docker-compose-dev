@@ -4,3 +4,12 @@
 [submodule "catalog-service"]
 	path = catalog-service
 	url = https://github.com/OnlineShoppen-dk/catalog-service
+[submodule "auth-service"]
+	path = auth-service
+	url = https://github.com/OnlineShoppen-dk/auth-service.git
+[submodule "email-service"]
+	path = email-service
+	url = https://github.com/OnlineShoppen-dk/email-service.git
+[submodule "onlineshoppen-frontend"]
+	path = onlineshoppen-frontend
+	url = https://github.com/OnlineShoppen-dk/onlineshoppen-frontend.git
