@@ -72,14 +72,20 @@ services:
         image: main-service
         container_name: main-service-container
         environment:
+            # JWT
             ISSUER: "OnlineShoppen.dk"
             AUDIENCE: "OnlineShoppen.dk"
             KEY: "SZBNheG6DYChL2oyIo6Q3dAiK4sREZGPX6orWfH2Mk="
+            # MySQL
             CONNECTION_STRING: "server=192.168.65.254;user=user;password=userpass;database=mainservicedb"
+            # RabbitMQ
             RABBITMQ_HOST: "rabbitqueue"
             RABBITMQ_PRODUCT_QUEUE: "productQueue"
             RABBITMQ_USER: "user"
             RABBITMQ_PASS: "userpass"
+            # Azurite
+            AZURITE_CONNECTION_STRING: "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://host.docker.internal"
+            AZURITE_CONTAINER: "mainservicecontainer"
         ports:
             - "8081:8080"
         networks:
@@ -87,6 +93,16 @@ services:
         depends_on:
             main-service-db:
                 condition: service_healthy
+    azurite:
+        image: mcr.microsoft.com/azure-storage/azurite
+        container_name: azurite
+        ports:
+            - "10000:10000"
+            - "10001:10001"
+            - "10002:10002"
+        command: "azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0"
+        volumes:
+            - ./azurite-data:/data
 
     catalogservice:
         build:
