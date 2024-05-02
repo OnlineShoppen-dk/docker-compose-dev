@@ -22,8 +22,6 @@ services:
             HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
             MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
             BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
-        networks:
-            - elastic
         depends_on:
             - elasticsearch1
 
@@ -43,8 +41,74 @@ services:
             interval: 20s
             timeout: 10s
             retries: 5
-        networks:
-            - queue-network
+
+    auth:
+      build:
+        context: ./auth-service
+        dockerfile: Dockerfile
+      container_name: auth-service
+      restart: always
+      ports: 
+        - 8080
+      environment:
+        DATABASE_URL: mysql://user:test12@db:3306/prismadb
+        AMQP_URL: amqp://user:userpass@rabbitqueue:5672/
+      depends_on:
+        - db
+        - rabbitqueue
+      volumes:
+      - ./auth-service/src:/app/auth
+      - /app/node_modules
+
+
+    db:
+      image: mysql:latest
+      container_name: auth-service-db
+      restart: always
+      environment:
+       MYSQL_ROOT_PASSWORD: test12
+       MYSQL_DATABASE: prismadb
+       MYSQL_USER: user
+       MYSQL_PASSWORD: test12
+      ports:
+      - 3307:3306
+      volumes:
+      - ./auth-service/mysql:/var/lib/mysql
+
+    frontend:
+      build: ./onlineshoppen-frontend
+      container_name: frontend
+      restart: always
+      stdin_open: true
+      environment:
+        - WDS_SOCKET_HOST=127.0.0.1 
+        - CHOKIDAR_USEPOLLING=true
+        - WATCHPACK_POLLING=true     
+      ports:
+        - 3000:8000
+      volumes:
+        - ./onlineshoppen-frontend/src:/app/src
+        - /app/node_modules
+
+    email-service:
+      build: ./email-service/EmailService
+      container_name: email-service
+      depends_on:
+        rabbitqueue:
+         condition: service_healthy
+         restart: true
+
+    
+    nginx:
+     image: nginx:latest
+     container_name: nginx
+     volumes:
+      - ./auth-service/conf:/etc/nginx/conf.d
+     depends_on:
+      - auth
+     ports:
+      - 80:80
+
 
     main-service-db:
         image: mysql:8.0.29
@@ -82,8 +146,6 @@ services:
             RABBITMQ_PASS: "userpass"
         ports:
             - "8081:8080"
-        networks:
-            - queue-network
         depends_on:
             main-service-db:
                 condition: service_healthy
@@ -94,9 +156,6 @@ services:
             dockerfile: Dockerfile
         ports:
             - "8080:80" # Maps port 80 in the container to port 8080 on the host
-        networks:
-            - elastic
-            - queue-network # Ensures it is on the same network as your Elasticsearch services
         depends_on:
             - elasticsearch1 # Ensures it starts after Elasticsearch is available
         restart: unless-stopped
@@ -121,8 +180,6 @@ services:
             - cluster.name=docker-cluster
             - ES_JAVA_OPTS=-Xms512m -Xmx512m
             - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
-        networks:
-            - elastic
         restart: unless-stopped
 
     elasticsearch2:
@@ -143,8 +200,6 @@ services:
             - cluster.name=docker-cluster
             - ES_JAVA_OPTS=-Xms512m -Xmx512m
             - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
-        networks:
-            - elastic
         restart: unless-stopped
 
     elasticsearch3:
@@ -165,8 +220,6 @@ services:
             - cluster.name=docker-cluster
             - ES_JAVA_OPTS=-Xms512m -Xmx512m
             - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-}
-        networks:
-            - elastic
         restart: unless-stopped
 
     logstash:
@@ -185,9 +238,6 @@ services:
         environment:
             LS_JAVA_OPTS: -Xms256m -Xmx256m
             LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
-        networks:
-            - elastic
-            - queue-network
         depends_on:
             - elasticsearch1
         restart: unless-stopped
@@ -203,16 +253,10 @@ services:
             - 5601:5601
         environment:
             KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
-        networks:
-            - elastic
         depends_on:
             - elasticsearch1
         restart: unless-stopped
 
-networks:
-    queue-network:
-    elastic:
-        driver: bridge
 
 volumes:
     elasticsearch1:
