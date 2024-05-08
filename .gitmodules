@@ -13,3 +13,9 @@
 [submodule "onlineshoppen-frontend"]
 	path = onlineshoppen-frontend
 	url = https://github.com/OnlineShoppen-dk/onlineshoppen-frontend.git
+[submodule "dummy-index"]
+	path = dummy-index
+	url = https://github.com/OnlineShoppen-dk/dummy-index
+[submodule "catalog-service-v2"]
+	path = catalog-service-v2
+	url = https://github.com/OnlineShoppen-dk/catalog-service-v2

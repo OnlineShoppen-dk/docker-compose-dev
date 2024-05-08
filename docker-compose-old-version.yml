@@ -19,8 +19,9 @@ services:
             RABBITMQ_USER: "user"
             RABBITMQ_PASS: "userpass"
             # RabbitMQ Queues
-            RABBITMQ_PRODUCT_SYNC_QUEUE: "productSyncQueue"
-            RABBITMQ_PRODUCT_QUEUE: "productQueue"
+            RABBITMQ_PRODUCT_SYNC_QUEUE: "productAddQueue"
+            RABBITMQ_PRODUCT_ADD_QUEUE: "productAddQueue"
+            RABBITMQ_PRODUCT_UPDATE_QUEUE: "productUpdateQueue"
             RABBITMQ_PRODUCT_DELETE_QUEUE: "productDeleteQueue"
             # Azurite
             AZURITE_CONNECTION_STRING: "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://host.docker.internal"
@@ -30,8 +31,6 @@ services:
         depends_on:
             main-service-db:
                 condition: service_healthy
-        networks:
-            - elastic
     
     catalog-service:
         build:
@@ -50,7 +49,7 @@ services:
 
     dummy-index-service:
         build:
-            context: ./dummy-index/dummy-index/
+            context: ./dummy-index/indexer-v0/
             dockerfile: Dockerfile
         ports:
             - "8082:8080" # Maps port 80 in the container to port 8080 on the host
@@ -61,8 +60,7 @@ services:
             RABBITMQ_USER: "user"
             RABBITMQ_PASS: "userpass"
         depends_on:
-            elasticsearch:
-                condition: service_healthy
+            - elasticsearch # Ensures it starts after Elasticsearch is available
         restart: unless-stopped
         networks:
             - elastic
@@ -78,11 +76,6 @@ services:
           - "9300:9300"
         networks:
             - elastic
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:9200"]
-            interval: 20s
-            timeout: 10s
-            retries: 5
 
     kibana:
         image: docker.elastic.co/kibana/kibana:7.10.1
@@ -91,8 +84,6 @@ services:
           - "5601:5601"
         environment:
           - ELASTICSEARCH_URL=http://elasticsearch:9200
-        networks:
-            - elastic
 
     azurite:
         image: mcr.microsoft.com/azure-storage/azurite
@@ -139,8 +130,6 @@ services:
             interval: 20s
             timeout: 10s
             retries: 5
-        networks:
-            - elastic
 
 networks:
     elastic:
