@@ -13,3 +13,6 @@
 [submodule "onlineshoppen-frontend"]
 	path = onlineshoppen-frontend
 	url = https://github.com/OnlineShoppen-dk/onlineshoppen-frontend.git
+[submodule "Indexer"]
+	path = Indexer
+	url = https://github.com/OnlineShoppen-dk/Indexer.git
