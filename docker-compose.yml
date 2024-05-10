@@ -30,69 +30,101 @@ services:
     depends_on:
       main-service-db:
         condition: service_healthy
-    networks:
-      - elastic
 
-  catalog-service:
+  auth:
     build:
-      context: ./catalog-service-v2/catalog-service-v2/
-      dockerfile: Dockerfile
+     context: ./auth-service
+     dockerfile: Dockerfile
+    container_name: auth-service
+    restart: always
     ports:
-      - "8080:8080" # Maps port 80 in the container to port 8080 on the host
+        - 8080
     environment:
-      ELASTICSEARCH_USERNAME: "elastic"
-      ELASTICSEARCH_PASSWORD: "changeme"
+          DATABASE_URL: mysql://user:test12@db:3306/prismadb
+          AMQP_URL: amqp://user:userpass@rabbitqueue:5672/
     depends_on:
-      - elasticsearch # Ensures it starts after Elasticsearch is available
-    restart: unless-stopped
-    networks:
-      - elastic
+          - db
+          - rabbitqueue
+    volumes:
+          - ./auth-service:/app
+          - /app/node_modules
 
-  dummy-index-service:
-    build:
-      context: ./dummy-index/dummy-index/
-      dockerfile: Dockerfile
-    ports:
-      - "8082:8080" # Maps port 80 in the container to port 8080 on the host
-    environment:
-      ELASTICSEARCH_USERNAME: "elastic"
-      ELASTICSEARCH_PASSWORD: "changeme"
-      RABBITMQ_HOST: "rabbitqueue"
-      RABBITMQ_USER: "user"
-      RABBITMQ_PASS: "userpass"
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - elastic
+  nginx:
+      image: nginx:latest
+      container_name: nginx
+      volumes:
+          - ./auth-service/conf:/etc/nginx/conf.d
+      depends_on:
+          - auth
+      ports:
+          - 80:80
+
+  db:
+      image: mysql:latest
+      container_name: auth-service-db
+      restart: always
+      environment:
+          MYSQL_ROOT_PASSWORD: test12
+          MYSQL_DATABASE: prismadb
+          MYSQL_USER: user
+          MYSQL_PASSWORD: test12
+      ports:
+          - 3307:3306
+      volumes:
+          - ./auth-service/mysql:/var/lib/mysql
+
+  # catalog-service:
+  #   build:
+  #     context: ./catalog-service-v2/catalog-service-v2/
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8080:8080" # Maps port 80 in the container to port 8080 on the host
+  #   environment:
+  #     ELASTICSEARCH_USERNAME: "elastic"
+  #     ELASTICSEARCH_PASSWORD: "changeme"
+  #   depends_on:
+  #     - elasticsearch # Ensures it starts after Elasticsearch is available
+  #   restart: unless-stopped
+
+  # dummy-index-service:
+  #   build:
+  #     context: ./dummy-index/dummy-index/
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8082:8080" # Maps port 80 in the container to port 8080 on the host
+  #   environment:
+  #     ELASTICSEARCH_USERNAME: "elastic"
+  #     ELASTICSEARCH_PASSWORD: "changeme"
+  #     RABBITMQ_HOST: "rabbitqueue"
+  #     RABBITMQ_USER: "user"
+  #     RABBITMQ_PASS: "userpass"
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
   # SERVICES
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    networks:
-      - elastic
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
-      interval: 20s
-      timeout: 10s
-      retries: 5
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+  #   container_name: elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #   ports:
+  #     - "9200:9200"
+  #     - "9300:9300"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9200"]
+  #     interval: 20s
+  #     timeout: 10s
+  #     retries: 5
 
-  kibana:
-    image: docker.elastic.co/kibana/kibana:7.10.1
-    container_name: kibana
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-    networks:
-      - elastic
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.10.1
+  #   container_name: kibana
+  #   ports:
+  #     - "5601:5601"
+  #   environment:
+  #     - ELASTICSEARCH_URL=http://elasticsearch:9200
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
@@ -139,11 +171,8 @@ services:
       interval: 20s
       timeout: 10s
       retries: 5
-    networks:
-      - elastic
 
-networks:
-  elastic:
+
 
   # front-end repository
   # frontend:
@@ -186,47 +215,8 @@ networks:
   #     restart: true
 
   # auth-service repository
-  # auth:
-  #     build:
-  #         context: ./auth-service
-  #         dockerfile: Dockerfile
-  #     container_name: auth-service
-  #     restart: always
-  #     ports:
-  #         - 8080
-  #     environment:
-  #         DATABASE_URL: mysql://user:test12@db:3306/prismadb
-  #         AMQP_URL: amqp://user:userpass@rabbitqueue:5672/
-  #     depends_on:
-  #         - db
-  #         - rabbitqueue
-  #     volumes:
-  #         - ./auth-service/src:/app/auth
-  #         - /app/node_modules
 
-  # nginx:
-  #     image: nginx:latest
-  #     container_name: nginx
-  #     volumes:
-  #         - ./auth-service/conf:/etc/nginx/conf.d
-  #     depends_on:
-  #         - auth
-  #     ports:
-  #         - 80:80
 
-  # db:
-  #     image: mysql:latest
-  #     container_name: auth-service-db
-  #     restart: always
-  #     environment:
-  #         MYSQL_ROOT_PASSWORD: test12
-  #         MYSQL_DATABASE: prismadb
-  #         MYSQL_USER: user
-  #         MYSQL_PASSWORD: test12
-  #     ports:
-  #         - 3307:3306
-  #     volumes:
-  #         - ./auth-service/mysql:/var/lib/mysql
 
   # auth-service repository
   # auth:
@@ -396,7 +386,7 @@ networks:
   #         - elasticsearch1
   #     restart: unless-stopped
 
-volumes:
-  elasticsearch1:
-  elasticsearch2:
-  elasticsearch3:
+# volumes:
+#   elasticsearch1:
+#   elasticsearch2:
+#   elasticsearch3:
