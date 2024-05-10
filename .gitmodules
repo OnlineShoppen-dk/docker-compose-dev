@@ -16,3 +16,9 @@
 [submodule "Indexer"]
 	path = Indexer
 	url = https://github.com/OnlineShoppen-dk/Indexer.git
+[submodule "dummy-index"]
+	path = dummy-index
+	url = https://github.com/OnlineShoppen-dk/dummy-index
+[submodule "catalog-service-v2"]
+	path = catalog-service-v2
+	url = https://github.com/OnlineShoppen-dk/catalog-service-v2
