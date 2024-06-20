@@ -22,7 +22,7 @@ services:
       # RabbitMQ Queues
       RABBITMQ_PRODUCT_SYNC_QUEUE: "productSyncQueue"
       RABBITMQ_PRODUCT_QUEUE: "productQueue"
-      RABBITMQ_PRODUCT_DELETE_QUEUE: "productDeleteQueue"
+      RABBITMQ_PRODUCT_DELETE_QUEUE: "ProductDeleteQueue"
       # Azurite
       AZURITE_CONNECTION_STRING: "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://host.docker.internal"
       AZURITE_CONTAINER: "mainservicecontainer"
